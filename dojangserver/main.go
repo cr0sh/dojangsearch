@@ -80,7 +80,7 @@ func crawlJob() {
 		return
 	}
 
-	verbLog.Println("Crawler: Updating database for R1")
+	verbLog.Printf("Crawler: Updating database for R1 (%d items)", len(r1ranks))
 	if err := updateDatabase(1, 2, r1ranks, now); err != nil {
 		errLog.Println("Crawler: Error while boltDB update Transaction:", err)
 		return
@@ -93,7 +93,7 @@ func crawlJob() {
 		return
 	}
 
-	verbLog.Println("Crawler: Updating database for R2")
+	verbLog.Printf("Crawler: Updating database for R2 (%d items)", len(r2ranks))
 	if err := updateDatabase(12, 2, r2ranks, now); err != nil {
 		errLog.Println("Crawler: Error while boltDB update Transaction:", err)
 		return
