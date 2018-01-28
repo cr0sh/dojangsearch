@@ -261,7 +261,6 @@ func main() {
 			errLog.Println("HTTP: Request parse failed:", err)
 			return
 		}
-		verbLog.Println(request)
 
 		if err := db.View(func(tx *bolt.Tx) error {
 			var response struct {
