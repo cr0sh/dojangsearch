@@ -200,7 +200,7 @@ func updateDatabase(world, typeid int, ranks []rankItem, updateTime time.Time) e
 			if err := json.Unmarshal(mbuf, &mrank); err != nil {
 				return err
 			}
-			if mrank.fullsec() < rank.fullsec() {
+			if mrank.Floor < rank.Floor || (mrank.Floor == rank.Floor && mrank.fullsec() > rank.fullsec()) {
 				bm.Put([]byte(strings.ToLower(rank.Name)), buf)
 			}
 		}
