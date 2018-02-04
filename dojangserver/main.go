@@ -229,7 +229,7 @@ func main() {
 	verbLog.Println("Starting initial crawler")
 
 	c := cron.New()
-	c.AddFunc("@hourly", crawlJob)
+	c.AddFunc("@every 8h", crawlJob)
 
 	verbLog.Println("Starting cronjob runner")
 	c.Start()
