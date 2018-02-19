@@ -255,7 +255,7 @@ func main() {
 		os.Exit(0)
 	}()
 
-	crawlJob()
+	// crawlJob()
 
 	http.HandleFunc("/getrank", func(w http.ResponseWriter, r *http.Request) {
 		var request struct {
