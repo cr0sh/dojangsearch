@@ -117,7 +117,7 @@ func crawlDojangRank(world, typeid int) ([]rankItem, error) {
 		u.RawQuery = q.Encode()
 		r, err := http.Get(u.String())
 		if r != nil {
-			defer r.Close()
+			defer r.Body.Close()
 		}
 
 		if err != nil {
