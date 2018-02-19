@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"github.com/boltdb/bolt"
 	"github.com/robfig/cron"
+	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -114,6 +116,10 @@ func crawlDojangRank(world, typeid int) ([]rankItem, error) {
 		q.Add("GameWorldID", strconv.Itoa(world))
 		u.RawQuery = q.Encode()
 		r, err := http.Get(u.String())
+		if r != nil {
+			defer r.Close()
+		}
+
 		if err != nil {
 			return nil, err
 		}
@@ -131,6 +137,8 @@ func crawlDojangRank(world, typeid int) ([]rankItem, error) {
 		}
 		ranks = append(ranks, resp.List...)
 		idx = resp.NextIdx
+
+		io.Copy(ioutil.Discard, r.Body)
 	}
 	return ranks, nil
 }
