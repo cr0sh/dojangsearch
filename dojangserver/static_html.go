@@ -63,7 +63,7 @@ function formatDate(date) {
 		<input type="text" name="username" id="username" placeholder="캐릭터 이름">
 		<select name="server" id="server">
 			<option value="1">리부트</option>
-			<option value="2">리부트2</option>
+			<option value="12">리부트2</option>
 		</select>
 		<input type="submit" value="검색">
 		<br>
