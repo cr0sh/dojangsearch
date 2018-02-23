@@ -15,7 +15,7 @@ const webcontent = `
 $("document").ready(function() {
 	$("#frm").submit(function(event) {
 		event.preventDefault();
-		$("#result").text(JSON.stringify({"World": parseInt($("#server").val(), 10), "Type": 2, "Name": $("#username").val()}));
+		$("#result").text("전적 검색 중...");
 		$.ajax({
 			type: "POST",
 			url: "/getrank",
