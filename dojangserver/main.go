@@ -198,7 +198,6 @@ func updateDatabase(world, typeid int, ranks []rankItem, updateTime time.Time) e
 				return err
 			}
 
-			br.Put([]byte(strings.ToLower(rank.Name)), buf)
 			mbuf := bm.Get([]byte(rank.Name))
 			if mbuf == nil {
 				bm.Put([]byte(strings.ToLower(rank.Name)), buf)
@@ -209,6 +208,17 @@ func updateDatabase(world, typeid int, ranks []rankItem, updateTime time.Time) e
 			if err := json.Unmarshal(mbuf, &mrank); err != nil {
 				return err
 			}
+
+			if mrank.Floor == rank.Floor && mrank.fullsec() == rank.fullsec() {
+				rank.CheckedTimeUnix = mrank.CheckedTimeUnix
+				buf, err := json.Marshal(rank)
+				if err != nil {
+					return err
+				}
+			}
+
+			br.Put([]byte(strings.ToLower(rank.Name)), buf)
+
 			if mrank.Floor < rank.Floor || (mrank.Floor == rank.Floor && mrank.fullsec() > rank.fullsec()) {
 				bm.Put([]byte(strings.ToLower(rank.Name)), buf)
 			}
