@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"encoding/json"
+	"flag"
 	"github.com/boltdb/bolt"
 	"github.com/robfig/cron"
 	"io"
@@ -227,6 +228,8 @@ func updateDatabase(world, typeid int, ranks []rankItem, updateTime time.Time) e
 }
 
 func main() {
+	update := flag.Bool("update", false, "Updates database at start if provided")
+	flag.Parse()
 	verbLog.Println("Opening boltDB database")
 	var err error
 	if db, err = bolt.Open("database.db", 0600, nil); err != nil {
@@ -255,9 +258,14 @@ func main() {
 		os.Exit(0)
 	}()
 
-	// crawlJob()
+	if *update {
+		verbLog.Println("Updating database at start(-update flag provided)")
+		crawlJob()
+	}
 
 	http.HandleFunc("/getrank", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Content-Type", "application/json")
 		var request struct {
 			World int
 			Type  int
