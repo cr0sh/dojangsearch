@@ -350,5 +350,5 @@ func main() {
 	})
 
 	verbLog.Println("Starting HTTP server on", *laddr)
-	http.ListenAndServe(laddr, nil)
+	http.ListenAndServe(*laddr, nil)
 }
