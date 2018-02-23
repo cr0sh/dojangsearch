@@ -211,7 +211,7 @@ func updateDatabase(world, typeid int, ranks []rankItem, updateTime time.Time) e
 
 			if mrank.Floor == rank.Floor && mrank.fullsec() == rank.fullsec() {
 				rank.CheckedTimeUnix = mrank.CheckedTimeUnix
-				buf, err := json.Marshal(rank)
+				buf, err = json.Marshal(rank)
 				if err != nil {
 					return err
 				}
