@@ -239,6 +239,7 @@ func updateDatabase(world, typeid int, ranks []rankItem, updateTime time.Time) e
 
 func main() {
 	update := flag.Bool("update", false, "Updates database at start if provided")
+	laddr := flag.String("addr", ":4412", "Bind address for HTTP server")
 	flag.Parse()
 	verbLog.Println("Opening boltDB database")
 	var err error
@@ -348,7 +349,6 @@ func main() {
 		}
 	})
 
-	laddr := ":4412"
-	verbLog.Println("Starting HTTP server on", laddr)
+	verbLog.Println("Starting HTTP server on", *laddr)
 	http.ListenAndServe(laddr, nil)
 }
