@@ -4,8 +4,10 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"github.com/boltdb/bolt"
 	"github.com/robfig/cron"
+	"github.com/tucnak/telebot"
 	"io"
 	"io/ioutil"
 	"log"
@@ -31,6 +33,11 @@ var lastCrawlTimeLock sync.Mutex
 var lastCrawlTime int64
 
 var db *bolt.DB
+
+var bot *telebot.Bot
+var channel *telebot.Chat
+
+var token, clientID *string
 
 type rankItem struct {
 	Rank       int64  `json:"rank,string"`
@@ -59,9 +66,11 @@ func (r *rankItem) fullsec() int {
 }
 
 func crawlJob() {
+	bot.Send(channel, "크롤링 작업이 시작됩니다.")
 	lastCrawlTimeLock.Lock()
 	if lastCrawlTime != 0 {
 		errLog.Println("Crawler: Another crawler is already running since", time.Unix(lastCrawlTime, 0).Format(timeFormat))
+		bot.Send(channel, "경고: 크롤러 작업이 지연중입니다")
 		lastCrawlTimeLock.Unlock()
 		return
 	}
@@ -72,6 +81,7 @@ func crawlJob() {
 	defer func() {
 		lastCrawlTimeLock.Lock()
 		verbLog.Println("Crawler: Finished ranking crawler since", time.Unix(lastCrawlTime, 0).Format(timeFormat), "at", time.Now().Format(timeFormat))
+		bot.Send(channel, "크롤링 작업이 종료됩니다.")
 		lastCrawlTime = 0
 		lastCrawlTimeLock.Unlock()
 	}()
@@ -80,12 +90,15 @@ func crawlJob() {
 	r1ranks, err := crawlDojangRank(1, 2)
 	if err != nil {
 		errLog.Println("Crawler: crawlDojangRank failed:", err)
+		bot.Send(channel, "리부트1 크롤링 오류: "+err.Error())
 		return
 	}
 
+	bot.Send(channel, fmt.Sprintf("리부트1 DB 갱신중: 기록 %d개", len(r1ranks)))
 	verbLog.Printf("Crawler: Updating database for R1 (%d items)", len(r1ranks))
 	if err := updateDatabase(1, 2, r1ranks, now); err != nil {
 		errLog.Println("Crawler: Error while boltDB update Transaction:", err)
+		bot.Send(channel, "리부트1 DB 갱신 오류: "+err.Error())
 		return
 	}
 
@@ -93,14 +106,19 @@ func crawlJob() {
 	r2ranks, err := crawlDojangRank(12, 2)
 	if err != nil {
 		errLog.Println("Crawler: crawlDojangRank failed:", err)
+		bot.Send(channel, "리부트2 크롤링 오류: "+err.Error())
 		return
 	}
 
+	bot.Send(channel, fmt.Sprintf("리부트2 DB 갱신중: 기록 %d개", len(r2ranks)))
 	verbLog.Printf("Crawler: Updating database for R2 (%d items)", len(r2ranks))
 	if err := updateDatabase(12, 2, r2ranks, now); err != nil {
 		errLog.Println("Crawler: Error while boltDB update Transaction:", err)
+		bot.Send(channel, "리부트2 DB 갱신 오류: "+err.Error())
 		return
 	}
+
+	bot.Send(channel, "크롤링 작업이 정상입니다.")
 }
 
 func crawlDojangRank(world, typeid int) ([]rankItem, error) {
@@ -201,6 +219,7 @@ func updateDatabase(world, typeid int, ranks []rankItem, updateTime time.Time) e
 			mbuf := bm.Get([]byte(rank.Name))
 			if mbuf == nil {
 				bm.Put([]byte(strings.ToLower(rank.Name)), buf)
+				br.Put([]byte(strings.ToLower(rank.Name)), buf)
 				continue
 			}
 
@@ -209,11 +228,15 @@ func updateDatabase(world, typeid int, ranks []rankItem, updateTime time.Time) e
 				return err
 			}
 
-			if mrank.Floor == rank.Floor && mrank.fullsec() == rank.fullsec() {
-				rank.CheckedTimeUnix = mrank.CheckedTimeUnix
-				buf, err = json.Marshal(rank)
-				if err != nil {
+			rbuf := br.Get([]byte(rank.Name))
+			if rbuf != nil {
+				var rrank rankItem
+				if err := json.Unmarshal(rbuf, &rrank); err != nil {
 					return err
+				}
+
+				if rrank.Floor == rank.Floor && rrank.fullsec() == rank.fullsec() {
+					continue
 				}
 			}
 
@@ -240,9 +263,25 @@ func updateDatabase(world, typeid int, ranks []rankItem, updateTime time.Time) e
 func main() {
 	update := flag.Bool("update", false, "Updates database at start if provided")
 	laddr := flag.String("addr", ":4412", "Bind address for HTTP server")
+	token = flag.String("token", "", "Telegram bot token for cron job report")
+	clientID = flag.String("clientid", "", "telegram user id to receive reports")
 	flag.Parse()
-	verbLog.Println("Opening boltDB database")
+
 	var err error
+	if bot, err = telebot.NewBot(telebot.Settings{
+		Token:  *token,
+		Poller: nil,
+	}); err != nil {
+		errLog.Fatal("telebot.NewBot:", err)
+	}
+
+	if channel, err = bot.ChatByID(*clientID); err != nil {
+		errLog.Fatal("bot.ChatByID:", err)
+	}
+
+	bot.Send(channel, "무릉도장 검색기가 시작됩니다.")
+
+	verbLog.Println("Opening boltDB database")
 	if db, err = bolt.Open("database.db", 0600, nil); err != nil {
 		errLog.Fatal("bolt.Open:", err)
 	}
@@ -350,5 +389,7 @@ func main() {
 	})
 
 	verbLog.Println("Starting HTTP server on", *laddr)
-	http.ListenAndServe(*laddr, nil)
+	if err = http.ListenAndServe(*laddr, nil); err != nil {
+		log.Fatal("http.ListenAndServe:", err)
+	}
 }
