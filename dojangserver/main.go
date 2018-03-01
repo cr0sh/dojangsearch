@@ -31,6 +31,8 @@ var errLog = log.New(os.Stderr, "ERROR: ", log.Lshortfile|log.Ldate|log.Ltime)
 
 var lastCrawlTimeLock sync.Mutex
 var lastCrawlTime int64
+var lastCrawlTimeLockLastWeek sync.Mutex
+var lastCrawlTimeLastWeek int64
 
 var db *bolt.DB
 
@@ -65,8 +67,19 @@ func (r *rankItem) fullsec() int {
 	return r.Second + r.Minute*60
 }
 
+// alignTime 함수는 해당 날짜에서 전 주의 일요일을 반환합니다. 시, 분, 초는 입력과 같습니다.
+// 각 주는 월요일이 시작입니다.
+func alignTime(t time.Time) time.Time {
+	weekday := t.Weekday()
+	if weekday == time.Sunday {
+		return t.AddDate(0, 0, -7)
+	} else {
+		return t.AddDate(0, 0, -int(weekday))
+	}
+}
+
 func crawlJob() {
-	bot.Send(channel, "크롤링 작업이 시작됩니다.")
+	bot.Send(channel, "*크롤링 작업이 시작됩니다.")
 	lastCrawlTimeLock.Lock()
 	if lastCrawlTime != 0 {
 		errLog.Println("Crawler: Another crawler is already running since", time.Unix(lastCrawlTime, 0).Format(timeFormat))
@@ -81,13 +94,13 @@ func crawlJob() {
 	defer func() {
 		lastCrawlTimeLock.Lock()
 		verbLog.Println("Crawler: Finished ranking crawler since", time.Unix(lastCrawlTime, 0).Format(timeFormat), "at", time.Now().Format(timeFormat))
-		bot.Send(channel, "크롤링 작업이 종료됩니다.")
+		bot.Send(channel, "*크롤링 작업이 종료됩니다.")
 		lastCrawlTime = 0
 		lastCrawlTimeLock.Unlock()
 	}()
 
 	verbLog.Println("Crawler: Starting HTTP client for R1")
-	r1ranks, err := crawlDojangRank(1, 2)
+	r1ranks, err := crawlDojangRank(1, 2, false)
 	if err != nil {
 		errLog.Println("Crawler: crawlDojangRank failed:", err)
 		bot.Send(channel, "리부트1 크롤링 오류: "+err.Error())
@@ -103,7 +116,7 @@ func crawlJob() {
 	}
 
 	verbLog.Println("Crawler: Starting HTTP client for R2")
-	r2ranks, err := crawlDojangRank(12, 2)
+	r2ranks, err := crawlDojangRank(12, 2, false)
 	if err != nil {
 		errLog.Println("Crawler: crawlDojangRank failed:", err)
 		bot.Send(channel, "리부트2 크롤링 오류: "+err.Error())
@@ -121,14 +134,75 @@ func crawlJob() {
 	bot.Send(channel, "크롤링 작업이 정상입니다.")
 }
 
-func crawlDojangRank(world, typeid int) ([]rankItem, error) {
+func crawlJobLastWeek() {
+	bot.Send(channel, "*지난주 크롤링 작업이 시작됩니다.")
+	lastCrawlTimeLockLastWeek.Lock()
+	if lastCrawlTimeLastWeek != 0 {
+		errLog.Println("Crawler: Another crawler is already running since", time.Unix(lastCrawlTimeLastWeek, 0).Format(timeFormat))
+		bot.Send(channel, "경고: 지난주 크롤러 작업이 지연중입니다")
+		lastCrawlTimeLockLastWeek.Unlock()
+		return
+	}
+	now := time.Now()
+	lastCrawlTimeLastWeek = now.Unix()
+	verbLog.Println("Crawler: Started lastweek ranking crawler at", now.Format(timeFormat))
+	lastCrawlTimeLockLastWeek.Unlock()
+	defer func() {
+		lastCrawlTimeLockLastWeek.Lock()
+		verbLog.Println("Crawler: Finished lastweek ranking crawler since", time.Unix(lastCrawlTimeLastWeek, 0).Format(timeFormat), "at", time.Now().Format(timeFormat))
+		bot.Send(channel, "*지난주 크롤링 작업이 종료됩니다.")
+		lastCrawlTimeLastWeek = 0
+		lastCrawlTimeLockLastWeek.Unlock()
+	}()
+
+	verbLog.Println("Crawler: Starting HTTP client for R1")
+	r1ranks, err := crawlDojangRank(1, 2, false)
+	if err != nil {
+		errLog.Println("Crawler: crawlDojangRankLastWeek failed:", err)
+		bot.Send(channel, "리부트1 지난주 크롤링 오류: "+err.Error())
+		return
+	}
+
+	bot.Send(channel, fmt.Sprintf("리부트1 지난주 DB 갱신중: 기록 %d개", len(r1ranks)))
+	verbLog.Printf("Crawler: Updating lastweek database for R1 (%d items)", len(r1ranks))
+	if err := updateDatabaseLastWeek(1, 2, r1ranks, now); err != nil {
+		errLog.Println("Crawler: Error while boltDB update Transaction:", err)
+		bot.Send(channel, "리부트1 지난주 DB 갱신 오류: "+err.Error())
+		return
+	}
+
+	verbLog.Println("Crawler: Starting HTTP client for R2")
+	r2ranks, err := crawlDojangRank(12, 2, false)
+	if err != nil {
+		errLog.Println("Crawler: crawlDojangRankLastWeek failed:", err)
+		bot.Send(channel, "리부트2 지난주 크롤링 오류: "+err.Error())
+		return
+	}
+
+	bot.Send(channel, fmt.Sprintf("리부트2 지난주 DB 갱신중: 기록 %d개", len(r2ranks)))
+	verbLog.Printf("Crawler: Updating lastweek database for R2 (%d items)", len(r2ranks))
+	if err := updateDatabaseLastWeek(12, 2, r2ranks, now); err != nil {
+		errLog.Println("Crawler: Error while boltDB update Transaction:", err)
+		bot.Send(channel, "리부트2 지난주 DB 갱신 오류: "+err.Error())
+		return
+	}
+
+	bot.Send(channel, "지난주 크롤링 작업이 정상입니다.")
+}
+
+func crawlDojangRank(world, typeid int, lastWeek bool) ([]rankItem, error) {
 	idx := 1
 	ranks := make([]rankItem, 0, 200)
 	t := time.NewTicker(time.Millisecond * 200)
 	defer t.Stop()
 
 	for range t.C {
-		u, _ := url.Parse("http://m.maplestory.nexon.com/MapleStory/Data/Json/Ranking/DojangThisWeekListJson.aspx")
+		var u *url.URL
+		if lastWeek {
+			u, _ = url.Parse("http://m.maplestory.nexon.com/MapleStory/Data/Json/Ranking/DojangLastWeekListJson.aspx")
+		} else {
+			u, _ = url.Parse("http://m.maplestory.nexon.com/MapleStory/Data/Json/Ranking/DojangThisWeekListJson.aspx")
+		}
 		q := u.Query()
 		q.Add("rankidx", strconv.Itoa(idx))
 		q.Add("cateType", strconv.Itoa(typeid))
@@ -163,6 +237,10 @@ func crawlDojangRank(world, typeid int) ([]rankItem, error) {
 }
 
 func updateDatabase(world, typeid int, ranks []rankItem, updateTime time.Time) error {
+	realTime := updateTime
+	if updateTime.Weekday() != time.Monday {
+		realTime.AddDate(0, 0, -1)
+	}
 	return db.Update(func(tx *bolt.Tx) error {
 		br, err := tx.CreateBucketIfNotExists([]byte("recent-" + strconv.Itoa(world) + "-" + strconv.Itoa(typeid)))
 		if err != nil {
@@ -209,7 +287,7 @@ func updateDatabase(world, typeid int, ranks []rankItem, updateTime time.Time) e
 			if rank.Floor, err = strconv.Atoi(string(fl[:idx2])); err != nil {
 				return err
 			}
-			rank.CheckedTimeUnix = updateTime.Unix()
+			rank.CheckedTimeUnix = realTime.Unix()
 
 			buf, err := json.Marshal(rank)
 			if err != nil {
@@ -235,7 +313,113 @@ func updateDatabase(world, typeid int, ranks []rankItem, updateTime time.Time) e
 					return err
 				}
 
-				if rrank.Floor == rank.Floor && rrank.fullsec() == rank.fullsec() {
+				ryear, rweek := time.Unix(rrank.CheckedTimeUnix, 0).ISOWeek()
+				cyear, cweek := realTime.ISOWeek()
+				if ryear == cyear && rweek == cweek &&
+					rrank.Floor == rank.Floor && rrank.fullsec() == rank.fullsec() {
+					continue
+				}
+			}
+
+			br.Put([]byte(strings.ToLower(rank.Name)), buf)
+
+			if mrank.Floor < rank.Floor || (mrank.Floor == rank.Floor && mrank.fullsec() > rank.fullsec()) {
+				bm.Put([]byte(strings.ToLower(rank.Name)), buf)
+			}
+		}
+
+		ntime := updateTime.Unix()
+		buf := make([]byte, 8)
+		binary.BigEndian.PutUint64(buf, *(*uint64)(unsafe.Pointer(&ntime)))
+
+		startbuf := bmeta.Get([]byte("start"))
+		if startbuf == nil {
+			bmeta.Put([]byte("start"), buf)
+		}
+		bmeta.Put([]byte("end"), buf)
+		return nil
+	})
+}
+
+func updateDatabaseLastWeek(world, typeid int, ranks []rankItem, updateTime time.Time) error {
+	realTime := alignTime(updateTime)
+	return db.Update(func(tx *bolt.Tx) error {
+		br, err := tx.CreateBucketIfNotExists([]byte("recent-" + strconv.Itoa(world) + "-" + strconv.Itoa(typeid)))
+		if err != nil {
+			return err
+		}
+
+		bm, err := tx.CreateBucketIfNotExists([]byte("maxrecord-" + strconv.Itoa(world) + "-" + strconv.Itoa(typeid)))
+		if err != nil {
+			return err
+		}
+
+		bmeta, err := tx.CreateBucketIfNotExists([]byte("metadata-" + strconv.Itoa(world) + "-" + strconv.Itoa(typeid)))
+		if err != nil {
+			return err
+		}
+		for _, rank := range ranks {
+			dur := []rune(rank.Duration)
+			fl := []rune(rank.FloorStr)
+			idx := 0
+			for _, d := range dur {
+				if unicode.IsNumber(d) {
+					idx++
+				} else {
+					break
+				}
+			}
+
+			idx2 := 0
+			for _, f := range fl {
+				if unicode.IsNumber(f) {
+					idx2++
+				} else {
+					break
+				}
+			}
+
+			var err error
+			if rank.Minute, err = strconv.Atoi(string(dur[:idx])); err != nil {
+				return err
+			}
+			if rank.Second, err = strconv.Atoi(string(dur[idx+2 : len(dur)-1])); err != nil {
+				return err
+			}
+			if rank.Floor, err = strconv.Atoi(string(fl[:idx2])); err != nil {
+				return err
+			}
+			rank.CheckedTimeUnix = realTime.Unix()
+
+			buf, err := json.Marshal(rank)
+			if err != nil {
+				return err
+			}
+
+			mbuf := bm.Get([]byte(rank.Name))
+			if mbuf == nil {
+				bm.Put([]byte(strings.ToLower(rank.Name)), buf)
+				br.Put([]byte(strings.ToLower(rank.Name)), buf)
+				continue
+			}
+
+			var mrank rankItem
+			if err := json.Unmarshal(mbuf, &mrank); err != nil {
+				return err
+			}
+
+			rbuf := br.Get([]byte(rank.Name))
+			if rbuf != nil {
+				var rrank rankItem
+				if err := json.Unmarshal(rbuf, &rrank); err != nil {
+					return err
+				}
+
+				rtime := time.Unix(rrank.CheckedTimeUnix, 0)
+				ryear, rweek := rtime.ISOWeek()
+				cyear, cweek := realTime.ISOWeek()
+				if (ryear == cyear && rweek == cweek &&
+					rrank.Floor == rank.Floor && rrank.fullsec() == rank.fullsec()) || realTime.After(rtime) {
 					continue
 				}
 			}
@@ -290,7 +474,8 @@ func main() {
 	verbLog.Println("Starting initial crawler")
 
 	c := cron.New()
-	c.AddFunc("@every 8h", crawlJob)
+	c.AddFunc("0 30 6 * * *", crawlJob)
+	c.AddFunc("0 0 6 * * Mon", crawlJobLastWeek)
 
 	verbLog.Println("Starting cronjob runner")
 	c.Start()
@@ -310,6 +495,7 @@ func main() {
 
 	if *update {
 		verbLog.Println("Updating database at start(-update flag provided)")
+		crawlJobLastWeek()
 		crawlJob()
 	}
 
