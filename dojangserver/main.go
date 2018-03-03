@@ -156,7 +156,7 @@ func crawlJobLastWeek() {
 	}()
 
 	verbLog.Println("Crawler: Starting HTTP client for R1")
-	r1ranks, err := crawlDojangRank(1, 2, false)
+	r1ranks, err := crawlDojangRank(1, 2, true)
 	if err != nil {
 		errLog.Println("Crawler: crawlDojangRankLastWeek failed:", err)
 		bot.Send(channel, "리부트1 지난주 크롤링 오류: "+err.Error())
@@ -172,7 +172,7 @@ func crawlJobLastWeek() {
 	}
 
 	verbLog.Println("Crawler: Starting HTTP client for R2")
-	r2ranks, err := crawlDojangRank(12, 2, false)
+	r2ranks, err := crawlDojangRank(12, 2, true)
 	if err != nil {
 		errLog.Println("Crawler: crawlDojangRankLastWeek failed:", err)
 		bot.Send(channel, "리부트2 지난주 크롤링 오류: "+err.Error())
