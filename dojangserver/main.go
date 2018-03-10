@@ -418,8 +418,8 @@ func updateDatabaseLastWeek(world, typeid int, ranks []rankItem, updateTime time
 				rtime := time.Unix(rrank.CheckedTimeUnix, 0)
 				ryear, rweek := rtime.ISOWeek()
 				cyear, cweek := realTime.ISOWeek()
-				if (ryear == cyear && rweek == cweek &&
-					rrank.Floor == rank.Floor && rrank.fullsec() == rank.fullsec()) || realTime.After(rtime) {
+				if ryear == cyear && rweek == cweek &&
+					rrank.Floor == rank.Floor && rrank.fullsec() == rank.fullsec() {
 					continue
 				}
 			}
