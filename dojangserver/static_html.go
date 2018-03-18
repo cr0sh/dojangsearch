@@ -62,8 +62,7 @@ function formatDate(date) {
 	<form action="" id="frm">
 		<input type="text" name="username" id="username" placeholder="캐릭터 이름">
 		<select name="server" id="server">
-			<option value="1">리부트</option>
-			<option value="12">리부트2</option>
+			%s
 		</select>
 		<input type="submit" value="검색">
 		<br>
@@ -78,6 +77,7 @@ function formatDate(date) {
 		</font>
 		<font color="blue">달성 날짜는 최대 ±1일의 오차가 존재합니다.</font><br><br>
 		알림: 2018-03-11에 2018-03-01부터 수집한 새로운 DB로 교체하였습니다. 아직 테스트 중이며 무릉 기록이 주 단위로만 정확하다는 점 인지해 주시기 바랍니다. <br>
+		알림: 리부트 외 서버들에 대한 랭킹 수집을 테스트 중입니다. 아직 사용하지 마시기 바랍니다. <br>
 	</div>
 </body>
 </html>

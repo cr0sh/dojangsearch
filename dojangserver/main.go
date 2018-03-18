@@ -99,39 +99,31 @@ func crawlJob() {
 		lastCrawlTimeLock.Unlock()
 	}()
 
-	verbLog.Println("Crawler: Starting HTTP client for R1")
-	r1ranks, err := crawlDojangRank(1, 2, false)
-	if err != nil {
-		errLog.Println("Crawler: crawlDojangRank failed:", err)
-		bot.Send(channel, "리부트1 크롤링 오류: "+err.Error())
-		return
+	rankss := make([][]rankItem, len(serverList))
+	for i, world := range serverList {
+		verbLog.Println("Crawler: Starting HTTP client for", serverName[world])
+		ranks, err := crawlDojangRank(world, 2, false)
+		if err != nil {
+			errLog.Println("Crawler: crawlDojangRank failed:", err)
+			bot.Send(channel, fmt.Sprintf("%s 크롤링 오류: %s", serverName[world], err.Error()))
+			continue
+		}
+		rankss[i] = ranks
 	}
 
-	bot.Send(channel, fmt.Sprintf("리부트1 DB 갱신중: 기록 %d개", len(r1ranks)))
-	verbLog.Printf("Crawler: Updating database for R1 (%d items)", len(r1ranks))
-	if err := updateDatabase(1, 2, r1ranks, now); err != nil {
-		errLog.Println("Crawler: Error while boltDB update Transaction:", err)
-		bot.Send(channel, "리부트1 DB 갱신 오류: "+err.Error())
-		return
+	for i, world := range serverList {
+		if rankss[i] == nil {
+			continue
+		}
+		bot.Send(channel, fmt.Sprintf("%s DB 갱신중: 기록 %d개", serverName[world], len(rankss[i])))
+		verbLog.Printf("Crawler: Updating database for %s (%d items)", serverName[world], len(rankss[i]))
+		if err := updateDatabase(world, 2, rankss[i], now); err != nil {
+			errLog.Println("Crawler: Error while boltDB update Transaction:", err)
+			bot.Send(channel, fmt.Sprintf("%s DB 갱신 오류: %s", serverName[world], err.Error()))
+		}
 	}
 
-	verbLog.Println("Crawler: Starting HTTP client for R2")
-	r2ranks, err := crawlDojangRank(12, 2, false)
-	if err != nil {
-		errLog.Println("Crawler: crawlDojangRank failed:", err)
-		bot.Send(channel, "리부트2 크롤링 오류: "+err.Error())
-		return
-	}
-
-	bot.Send(channel, fmt.Sprintf("리부트2 DB 갱신중: 기록 %d개", len(r2ranks)))
-	verbLog.Printf("Crawler: Updating database for R2 (%d items)", len(r2ranks))
-	if err := updateDatabase(12, 2, r2ranks, now); err != nil {
-		errLog.Println("Crawler: Error while boltDB update Transaction:", err)
-		bot.Send(channel, "리부트2 DB 갱신 오류: "+err.Error())
-		return
-	}
-
-	bot.Send(channel, "크롤링 작업이 정상입니다.")
+	bot.Send(channel, "지난주 크롤링 작업이 정상입니다.")
 }
 
 func crawlJobLastWeek() {
@@ -155,36 +147,28 @@ func crawlJobLastWeek() {
 		lastCrawlTimeLockLastWeek.Unlock()
 	}()
 
-	verbLog.Println("Crawler: Starting HTTP client for R1")
-	r1ranks, err := crawlDojangRank(1, 2, true)
-	if err != nil {
-		errLog.Println("Crawler: crawlDojangRankLastWeek failed:", err)
-		bot.Send(channel, "리부트1 지난주 크롤링 오류: "+err.Error())
-		return
+	rankss := make([][]rankItem, len(serverList))
+	for i, world := range serverList {
+		verbLog.Println("Crawler: Starting HTTP client for", serverName[world])
+		ranks, err := crawlDojangRank(world, 2, true)
+		if err != nil {
+			errLog.Println("Crawler: crawlDojangRankLastWeek failed:", err)
+			bot.Send(channel, fmt.Sprintf("%s 지난주 크롤링 오류: %s", serverName[world], err.Error()))
+			continue
+		}
+		rankss[i] = ranks
 	}
 
-	bot.Send(channel, fmt.Sprintf("리부트1 지난주 DB 갱신중: 기록 %d개", len(r1ranks)))
-	verbLog.Printf("Crawler: Updating lastweek database for R1 (%d items)", len(r1ranks))
-	if err := updateDatabaseLastWeek(1, 2, r1ranks, now); err != nil {
-		errLog.Println("Crawler: Error while boltDB update Transaction:", err)
-		bot.Send(channel, "리부트1 지난주 DB 갱신 오류: "+err.Error())
-		return
-	}
-
-	verbLog.Println("Crawler: Starting HTTP client for R2")
-	r2ranks, err := crawlDojangRank(12, 2, true)
-	if err != nil {
-		errLog.Println("Crawler: crawlDojangRankLastWeek failed:", err)
-		bot.Send(channel, "리부트2 지난주 크롤링 오류: "+err.Error())
-		return
-	}
-
-	bot.Send(channel, fmt.Sprintf("리부트2 지난주 DB 갱신중: 기록 %d개", len(r2ranks)))
-	verbLog.Printf("Crawler: Updating lastweek database for R2 (%d items)", len(r2ranks))
-	if err := updateDatabaseLastWeek(12, 2, r2ranks, now); err != nil {
-		errLog.Println("Crawler: Error while boltDB update Transaction:", err)
-		bot.Send(channel, "리부트2 지난주 DB 갱신 오류: "+err.Error())
-		return
+	for i, world := range serverList {
+		if rankss[i] == nil {
+			continue
+		}
+		bot.Send(channel, fmt.Sprintf("%s 지난주 DB 갱신중: 기록 %d개", serverName[world], len(rankss[i])))
+		verbLog.Printf("Crawler: Updating lastweek database for %s (%d items)", serverName[world], len(rankss[i]))
+		if err := updateDatabaseLastWeek(world, 2, rankss[i], now); err != nil {
+			errLog.Println("Crawler: Error while boltDB update Transaction:", err)
+			bot.Send(channel, fmt.Sprintf("%s 지난주 DB 갱신 오류: %s", serverName[world], err.Error()))
+		}
 	}
 
 	bot.Send(channel, "지난주 크롤링 작업이 정상입니다.")
@@ -474,7 +458,7 @@ func main() {
 	verbLog.Println("Starting initial crawler")
 
 	c := cron.New()
-	c.AddFunc("0 30 6 * * *", crawlJob)
+	c.AddFunc("0 0 7 * * *", crawlJob)
 	c.AddFunc("0 0 6 * * Mon", crawlJobLastWeek)
 
 	verbLog.Println("Starting cronjob runner")
