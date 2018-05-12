@@ -12,31 +12,50 @@ const webcontent = `
 	<script src="/jquery.js"></script>
 	<script src="/json3.js"></script>
 	<script>
+var url = new URL(window.location.href);
 $("document").ready(function() {
+	var params = decodeURI(url.search).substring(1).split(":", 2);
+	if(params.length >= 2) {
+		$("#server").val(params[0]);
+		$("#username").val(params[1]);
+		search(false);
+	}
+
 	$("#frm").submit(function(event) {
 		event.preventDefault();
-		$("#result").text("전적 검색 중...");
-		$.ajax({
-			type: "POST",
-			url: "/getrank",
-			data: JSON.stringify({"World": parseInt($("#server").val(), 10), "Type": 2, "Name": $("#username").val()}),
-			dataType: "json", 
-			contentType: "application/json",
-			success: function(data) {
-				if (!data.Ok) {
-					$("#result").html("서버에 저장된 전적이 없습니다.<br>" +
-					"전적 수집 기간: " + formatDate(new Date(data.Start * 1000)) + " ~ " +
-				formatDate(new Date(data.End * 1000)));
-					return false;
-				}
-				$("#result").html(createResult(data));
-			},
-			error: function() {
-				$("#result").text("검색 중 오류가 발생했습니다.");
-			}
-		});
+		search(true);
 	});
 });
+
+function search(pushURLState) {
+	$("#result").text("전적 검색 중...");
+	if(pushURLState && !!(window.history && history.pushState)) {
+		url.search = encodeURI($("#server").val() + ":" + $("#username").val());
+		history.pushState({
+			id: 'homepage'
+		}, document.getElementsByTagName("title")[0].innerHTML, url.href);
+	}
+	$.ajax({
+		type: "POST",
+		url: "/getrank",
+		data: JSON.stringify({"World": parseInt($("#server").val(), 10), "Type": 2, "Name": $("#username").val()}),
+		dataType: "json", 
+		contentType: "application/json",
+		success: function(data) {
+			if (!data.Ok) {
+				$("#result").html("서버에 저장된 전적이 없습니다.<br>" +
+				"전적 수집 기간: " + formatDate(new Date(data.Start * 1000)) + " ~ " +
+			formatDate(new Date(data.End * 1000)));
+				return false;
+			}
+			$("#result").html(createResult(data));
+		},
+		error: function() {
+			$("#result").text("검색 중 오류가 발생했습니다.");
+		}
+	});
+}
+
 
 function createResult(data) {
 	return "[최고 기록]<br>" + brief(data.MRank) +
