@@ -12,9 +12,8 @@ const webcontent = `
 	<script src="/jquery.js"></script>
 	<script src="/json3.js"></script>
 	<script>
-var url = new URL(window.location.href);
 $("document").ready(function() {
-	var params = decodeURI(url.search).substring(1).split(":", 2);
+	var params = decodeURI(window.location.search).substring(1).split(":", 2);
 	if(params.length >= 2) {
 		$("#server").val(params[0]);
 		$("#username").val(params[1]);
@@ -30,10 +29,10 @@ $("document").ready(function() {
 function search(pushURLState) {
 	$("#result").text("전적 검색 중...");
 	if(pushURLState && !!(window.history && history.pushState)) {
-		url.search = encodeURI($("#server").val() + ":" + $("#username").val());
+		var params = "?" + encodeURI($("#server").val() + ":" + $("#username").val());
 		history.pushState({
 			id: 'homepage'
-		}, document.getElementsByTagName("title")[0].innerHTML, url.href);
+		}, document.getElementsByTagName("title")[0].innerHTML, window.location.href.substr(0, window.location.href.length - window.location.search.length) + params);
 	}
 	$.ajax({
 		type: "POST",
